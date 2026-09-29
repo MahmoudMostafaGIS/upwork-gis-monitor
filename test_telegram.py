@@ -2,25 +2,30 @@ import os
 import requests
 
 token = os.environ["TELEGRAM_BOT_TOKEN"]
+chat_id = os.environ["TELEGRAM_CHAT_ID"]
 
-url = f"https://api.telegram.org/bot{token}/getUpdates"
+message = (
+    "GitHub Actions Telegram test\n\n"
+    "The notification system is working."
+)
 
-response = requests.get(url, timeout=30)
-print("HTTP status:", response.status_code)
+url = f"https://api.telegram.org/bot{token}/sendMessage"
 
-data = response.json()
-print("Telegram response:", data)
+response = requests.post(
+    url,
+    json={
+        "chat_id": chat_id,
+        "text": message,
+    },
+    timeout=30,
+)
 
-if not data.get("ok"):
-    raise RuntimeError(data)
+print("Telegram HTTP status:", response.status_code)
+print("Telegram response:", response.text)
 
-for update in data.get("result", []):
-    message = update.get("message", {})
-    chat = message.get("chat", {})
+response.raise_for_status()
 
-    print(
-        "FOUND CHAT:",
-        "id =", chat.get("id"),
-        "type =", chat.get("type"),
-        "name =", chat.get("first_name", "")
-    )
+if not response.json().get("ok"):
+    raise RuntimeError(response.text)
+
+print("Telegram message sent successfully.")

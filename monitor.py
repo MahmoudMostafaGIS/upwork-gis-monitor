@@ -28,7 +28,7 @@ SEARCH_TERMS = [
 ]
 
 # Search window requested by the user.
-MAX_JOB_AGE_MINUTES = 60
+MAX_JOB_AGE_MINUTES = 15
 
 # Keep seen IDs for 24 hours. Upwork's API documentation says cached data
 # should not be stored for more than 24 hours.

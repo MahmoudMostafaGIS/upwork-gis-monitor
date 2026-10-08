@@ -86,7 +86,6 @@ query PublicSearch($filter: PublicMarketplaceJobPostingsSearchFilter!) {
       }
       amount {
         displayValue
-        currency
       }
       hourlyBudgetType
       hourlyBudgetMin
@@ -264,8 +263,7 @@ def format_budget(job):
     amount = job.get("amount")
 
     if amount and amount.get("displayValue"):
-        currency = amount.get("currency", "")
-        return f"{amount['displayValue']} {currency}".strip()
+        return str(amount["displayValue"]).strip()
 
     hourly_min = job.get("hourlyBudgetMin")
     hourly_max = job.get("hourlyBudgetMax")

@@ -124,7 +124,7 @@ SEARCH_TERMS = [
     "Shapefile",
 ]
 
-MAX_JOB_AGE_MINUTES = 15
+MAX_JOB_AGE_MINUTES = 30
 SEEN_RETENTION_HOURS = 24
 STATE_FILE = Path("seen_jobs.json")
 

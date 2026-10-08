@@ -84,12 +84,6 @@ query PublicSearch($filter: PublicMarketplaceJobPostingsSearchFilter!) {
         name
         prettyName
       }
-      amount {
-        displayValue
-      }
-      hourlyBudgetType
-      hourlyBudgetMin
-      hourlyBudgetMax
       category
       subcategory
     }
@@ -260,24 +254,9 @@ def job_url(job):
 
 
 def format_budget(job):
-    amount = job.get("amount")
-
-    if amount and amount.get("displayValue"):
-        return str(amount["displayValue"]).strip()
-
-    hourly_min = job.get("hourlyBudgetMin")
-    hourly_max = job.get("hourlyBudgetMax")
-
-    if hourly_min is not None or hourly_max is not None:
-        if hourly_min is not None and hourly_max is not None:
-            return f"${hourly_min}-${hourly_max}/hr"
-
-        if hourly_min is not None:
-            return f"${hourly_min}/hr+"
-
-        return f"Up to ${hourly_max}/hr"
-
-    return "Hourly / not specified"
+    # The public endpoint can return invalid/null Money subfields for some
+    # postings, so budget fields are intentionally not queried.
+    return "Budget not available from public search"
 
 
 def format_age(minutes):

@@ -9,65 +9,231 @@ GRAPHQL_URL = "https://api.upwork.com/graphql"
 TOKEN_URL = "https://www.upwork.com/api/v3/oauth2/token"
 
 SEARCH_TERMS = [
+    # Core GIS
     "GIS",
+    "GIS Analyst",
+    "Geographic Information System (GIS)",
+    "Geographic Information System",
     "ArcGIS",
     "ArcGIS Pro",
     "QGIS",
+    "Geospatial",
+    "Geospatial Data",
+    "Geospatial Analysis",
+    "Spatial Analysis",
+
+    # GIS development / web mapping
+    "GIS Web Development",
+    "Web GIS",
+    "Web Mapping",
+    "Web Map",
+    "Interactive Map",
+    "Interactive Mapping",
+    "Interactive GIS",
+    "GIS Web Application",
+    "Web Map Application",
     "Mapbox",
-    "geospatial",
-    "GIS digitizing",
-    "map digitization",
-    "vectorization",
-    "georeferencing",
-    "spatial analysis",
-    "remote sensing",
+    "Mapbox GL JS",
+    "Leaflet",
+    "LeafletJS",
+    "D3.js",
+    "ArcGIS JavaScript API",
+    "ArcGIS Online",
+
+    # GIS data / automation
+    "Python GIS",
     "ArcPy",
+    "GeoPandas",
+    "GDAL",
+    "PostGIS",
+    "OpenStreetMap",
+    "OSM",
+    "GIS Automation",
+    "Spatial Database",
+    "GIS Data Processing",
+    "CAD to GIS",
+
+    # Digitizing / vectorization
+    "Digitizing",
+    "GIS Digitizing",
+    "GIS Digitization",
+    "Map Digitization",
+    "Map Digitizing",
+    "Building Digitization",
+    "Building Footprints",
+    "Road Digitization",
+    "Parcel Digitization",
+    "Land Use Digitization",
+    "Utility Digitization",
+    "Vectorization",
+    "Raster to Vector",
+    "Feature Digitization",
+    "Georeferencing",
+    "Georeference",
+
+    # Cartography / mapping
+    "Cartography",
+    "GIS Cartography",
+    "Cartographic Design",
+    "Map Design",
+    "Thematic Mapping",
+    "Map Production",
+    "Cartographic Visualization",
+    "Topographic Mapping",
+    "GIS Mapping",
+
+    # GeoAI / AI / machine learning
+    "GeoAI",
+    "Geospatial AI",
+    "AI GIS",
+    "GIS AI",
+    "AI Geospatial",
+    "Machine Learning GIS",
+    "Machine Learning Geospatial",
+    "Deep Learning GIS",
+    "Deep Learning Geospatial",
+    "Geospatial Machine Learning",
+    "Computer Vision GIS",
+    "Geospatial Computer Vision",
+    "Geospatial Data Science",
+    "ArcGIS Deep Learning",
+    "ArcGIS Pro Deep Learning",
+    "Object Detection GIS",
+    "Image Segmentation GIS",
+    "Semantic Segmentation GIS",
+    "Instance Segmentation GIS",
+    "OCR GIS",
+    "Geospatial OCR",
+
+    # Remote sensing / imagery
+    "Remote Sensing",
+    "Remote Sensing AI",
+    "Remote Sensing Machine Learning",
+    "Remote Sensing Deep Learning",
+    "Satellite",
+    "Satellite Image Analysis",
+    "Satellite Imagery AI",
+    "Image Classification GIS",
+    "Object Detection Geospatial",
+
+    # Other useful GIS data terms
+    "Geocoding",
+    "Google Earth",
+    "GeoJSON",
+    "KML",
+    "Shapefile",
 ]
 
-# Only notify about jobs posted within the last 15 minutes.
 MAX_JOB_AGE_MINUTES = 15
-
-# Keep seen IDs for 24 hours.
 SEEN_RETENTION_HOURS = 24
-
 STATE_FILE = Path("seen_jobs.json")
 
 SCORED_KEYWORDS = {
     "gis": 10,
+    "gis analyst": 10,
+    "geographic information system": 10,
     "arcgis": 10,
     "arcgis pro": 10,
     "qgis": 10,
-    "mapbox": 10,
+    "geospatial": 9,
+    "geospatial data": 8,
+    "geospatial analysis": 10,
+    "spatial analysis": 10,
+
+    "gis web development": 10,
     "gis web": 10,
     "web gis": 10,
-    "geospatial": 9,
-    "spatial analysis": 8,
-    "gis analysis": 10,
+    "web mapping": 9,
+    "web map": 7,
+    "interactive map": 10,
+    "interactive mapping": 10,
+    "interactive gis": 10,
+    "gis web application": 10,
+    "web map application": 10,
+    "mapbox": 10,
+    "mapbox gl js": 10,
+    "leaflet": 9,
+    "d3.js": 8,
+    "arcgis javascript api": 10,
+    "arcgis online": 8,
+
+    "python gis": 10,
+    "arcpy": 10,
+    "geopandas": 8,
+    "gdal": 8,
+    "postgis": 8,
+    "openstreetmap": 8,
+    "osm": 7,
+    "gis automation": 9,
+    "spatial database": 8,
+    "gis data processing": 8,
+    "cad to gis": 10,
+
+    "digitizing": 8,
     "gis digitizing": 10,
     "gis digitization": 10,
-    "map digitization": 9,
-    "digitizing": 7,
-    "vectorization": 8,
-    "raster to vector": 8,
-    "georeferencing": 8,
-    "arcpy": 8,
-    "geopandas": 8,
-    "gdal": 7,
-    "postgis": 8,
-    "remote sensing": 7,
-    "cartography": 6,
-    "shapefile": 5,
-    "geojson": 5,
-    "spatial data": 7,
-    "geographic information": 8,
-    "feature extraction": 7,
-    "building digitization": 8,
-    "road digitization": 8,
-    "parcel digitization": 8,
+    "map digitization": 10,
+    "map digitizing": 9,
+    "building digitization": 9,
+    "building footprints": 8,
+    "road digitization": 9,
+    "parcel digitization": 9,
+    "land use digitization": 9,
+    "utility digitization": 9,
+    "vectorization": 9,
+    "raster to vector": 9,
+    "feature digitization": 9,
+    "georeferencing": 9,
+    "georeference": 8,
+
+    "cartography": 7,
+    "gis cartography": 9,
+    "cartographic design": 9,
+    "map design": 8,
+    "thematic mapping": 8,
+    "map production": 8,
+    "cartographic visualization": 8,
+    "topographic mapping": 8,
+    "gis mapping": 8,
+
+    "geoai": 10,
+    "geospatial ai": 10,
+    "ai gis": 10,
+    "gis ai": 10,
+    "ai geospatial": 10,
+    "machine learning gis": 10,
+    "machine learning geospatial": 10,
+    "deep learning gis": 10,
+    "deep learning geospatial": 10,
+    "geospatial machine learning": 10,
+    "computer vision gis": 10,
+    "geospatial computer vision": 10,
+    "geospatial data science": 9,
+    "arcgis deep learning": 10,
+    "arcgis pro deep learning": 10,
+    "object detection gis": 10,
+    "image segmentation gis": 10,
+    "semantic segmentation gis": 10,
+    "instance segmentation gis": 10,
+    "ocr gis": 9,
+    "geospatial ocr": 10,
+
+    "remote sensing": 8,
+    "remote sensing ai": 10,
+    "remote sensing machine learning": 10,
+    "remote sensing deep learning": 10,
+    "satellite image analysis": 9,
+    "satellite imagery ai": 10,
+    "image classification gis": 9,
+    "object detection geospatial": 10,
+
+    "geocoding": 7,
+    "google earth": 6,
+    "geojson": 6,
+    "kml": 6,
+    "shapefile": 6,
 }
 
-# Uses Upwork's public marketplace search endpoint.
-# This endpoint requires "Read public marketplace Job Postings".
 QUERY = """
 query PublicSearch($filter: PublicMarketplaceJobPostingsSearchFilter!) {
   publicMarketplaceJobPostingsSearch(
@@ -144,7 +310,6 @@ def save_seen(seen):
 
 
 def get_access_token():
-    # Optional fallback. The current GitHub setup uses the refresh-token path.
     token = os.getenv("UPWORK_ACCESS_TOKEN")
 
     if token:
@@ -183,7 +348,6 @@ def get_access_token():
 
 
 def search_upwork(token, term):
-    # PublicMarketplaceJobPostingsSearchFilter uses pageOffset/pageSize.
     variables = {
         "filter": {
             "searchExpression_eq": term,
@@ -212,9 +376,7 @@ def search_upwork(token, term):
     payload = response.json()
 
     if payload.get("errors"):
-        raise RuntimeError(
-            json.dumps(payload["errors"], indent=2)
-        )
+        raise RuntimeError(json.dumps(payload["errors"], indent=2))
 
     return (
         payload.get("data", {})
@@ -254,8 +416,6 @@ def job_url(job):
 
 
 def format_budget(job):
-    # The public endpoint can return invalid/null Money subfields for some
-    # postings, so budget fields are intentionally not queried.
     return "Budget not available from public search"
 
 
@@ -303,8 +463,6 @@ def main():
     for term in SEARCH_TERMS:
         try:
             for job in search_upwork(token, term):
-                # Public search does not expose the same numeric search-result
-                # ID as marketplaceJobPostingsSearch. Ciphertext is preferred.
                 job_id = str(
                     job.get("ciphertext")
                     or job.get("recno")
@@ -334,11 +492,9 @@ def main():
         if not published:
             continue
 
-        # Ignore obviously invalid future timestamps.
         if published > now + timedelta(minutes=2):
             continue
 
-        # Only accept jobs posted within the requested 15-minute window.
         if published < cutoff:
             continue
 
@@ -349,7 +505,6 @@ def main():
 
         score, matched = score_job(job)
 
-        # Suppress weak/accidental keyword matches.
         if score < 15:
             continue
 
@@ -364,12 +519,8 @@ def main():
             )
         )
 
-    new_matches.sort(
-        key=lambda x: x[0],
-        reverse=True,
-    )
+    new_matches.sort(key=lambda x: x[0], reverse=True)
 
-    # Mark only qualifying jobs as seen.
     for _, _, _, _, job_id, _ in new_matches:
         seen[job_id] = now.isoformat()
 
@@ -384,18 +535,10 @@ def main():
         job,
     ) in new_matches:
 
-        title = job.get(
-            "title",
-            "Untitled GIS job",
-        )
+        title = job.get("title", "Untitled GIS job")
 
-        description = (
-            job.get("description") or ""
-        ).strip()
-
-        description = " ".join(
-            description.split()
-        )
+        description = (job.get("description") or "").strip()
+        description = " ".join(description.split())
 
         if len(description) > 500:
             description = description[:497] + "..."
@@ -417,9 +560,7 @@ def main():
         )
 
         if skill_names:
-            message += (
-                f"Skills: {', '.join(skill_names[:12])}\n"
-            )
+            message += f"Skills: {', '.join(skill_names[:12])}\n"
 
         message += (
             f"\n{description}\n\n"

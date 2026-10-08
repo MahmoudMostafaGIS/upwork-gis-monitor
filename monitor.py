@@ -125,8 +125,20 @@ SEARCH_TERMS = [
     "Shapefile",
 ]
 
+# Normal polling window. GitHub Actions runs every 10 minutes, so a small
+# overlap helps protect against scheduling/API delays.
 MAX_JOB_AGE_MINUTES = 20
-SEEN_RETENTION_HOURS = 24
+
+# Keep duplicate history long enough to cover delayed runs and recovery scans.
+SEEN_RETENTION_HOURS = 48
+
+# When a run is delayed or missed, search back from the previous successful
+# check (with a small overlap) instead of relying only on the normal 20-minute
+# window. The cap prevents an extremely old state from causing an unbounded
+# recovery window.
+RECOVERY_OVERLAP_MINUTES = 5
+MAX_RECOVERY_LOOKBACK_HOURS = 24
+
 STATE_FILE = Path("seen_jobs.json")
 
 
@@ -287,34 +299,62 @@ def parse_dt(value):
         return None
 
 
-def load_seen():
+def load_state():
+    """Load duplicate state and the timestamp of the last successful run.
+
+    Supports the old flat ``{job_id: timestamp}`` format so upgrading the
+    monitor does not discard existing duplicate history.
+    """
     if not STATE_FILE.exists():
-        return {}
+        return {}, None
 
     try:
         data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
 
-        if not isinstance(data, dict):
-            return {}
+        # New state format.
+        if isinstance(data, dict) and "jobs" in data:
+            raw_jobs = data.get("jobs", {})
+            last_successful_check = data.get("last_successful_check")
+        # Backward compatibility with the previous flat state format.
+        elif isinstance(data, dict):
+            raw_jobs = data
+            last_successful_check = None
+        else:
+            return {}, None
+
+        if not isinstance(raw_jobs, dict):
+            raw_jobs = {}
 
         cutoff = utcnow() - timedelta(hours=SEEN_RETENTION_HOURS)
         cleaned = {}
 
-        for job_id, timestamp in data.items():
+        for job_id, timestamp in raw_jobs.items():
             dt = parse_dt(timestamp)
 
             if dt and dt >= cutoff:
-                cleaned[job_id] = timestamp
+                cleaned[str(job_id)] = timestamp
 
-        return cleaned
+        last_check = parse_dt(last_successful_check)
 
-    except Exception:
-        return {}
+        return cleaned, last_check
+
+    except Exception as exc:
+        print(f"Could not read state file; starting safely: {exc}")
+        return {}, None
 
 
-def save_seen(seen):
+def save_state(seen, last_successful_check=None):
+    payload = {
+        "last_successful_check": (
+            last_successful_check.isoformat()
+            if isinstance(last_successful_check, datetime)
+            else last_successful_check
+        ),
+        "jobs": seen,
+    }
+
     STATE_FILE.write_text(
-        json.dumps(seen, indent=2, sort_keys=True),
+        json.dumps(payload, indent=2, sort_keys=True),
         encoding="utf-8",
     )
 
@@ -460,10 +500,31 @@ def send_telegram(message):
 
 def main():
     token = get_access_token()
-    seen = load_seen()
+    seen, last_successful_check = load_state()
 
     now = utcnow()
+
+    # Normal window: 20 minutes.
     cutoff = now - timedelta(minutes=MAX_JOB_AGE_MINUTES)
+
+    # Automatic missed-job recovery: if the previous successful run was
+    # farther back than the normal window, include jobs from shortly before
+    # that run as well. This catches jobs missed because GitHub Actions ran
+    # late, was temporarily unavailable, or an API call was delayed.
+    recovery_floor = now - timedelta(hours=MAX_RECOVERY_LOOKBACK_HOURS)
+
+    if last_successful_check:
+        recovery_cutoff = max(
+            recovery_floor,
+            last_successful_check - timedelta(minutes=RECOVERY_OVERLAP_MINUTES),
+        )
+
+        if recovery_cutoff < cutoff:
+            cutoff = recovery_cutoff
+            print(
+                "Recovery mode: searching back to "
+                f"{cutoff.isoformat()} based on the previous successful run."
+            )
 
     jobs_by_id = {}
     errors = []
@@ -536,11 +597,6 @@ def main():
 
     new_matches.sort(key=lambda x: x[0], reverse=True)
 
-    for _, _, job_id, _ in new_matches:
-        seen[job_id] = now.isoformat()
-
-    save_seen(seen)
-
     messages = []
 
     for index, (
@@ -587,10 +643,28 @@ def main():
         # separator only between jobs (not before the first or after the last).
         message = "NEW GIS JOBS — " + str(len(messages)) + "\n\n"
         message += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n".join(messages)
+
+        # IMPORTANT: only mark jobs as seen after Telegram accepts the
+        # notification. If Telegram fails, the jobs remain unseen and will be
+        # retried on the next run instead of being permanently lost.
         send_telegram(message)
+
+        for _, _, job_id, _ in new_matches:
+            seen[job_id] = now.isoformat()
+
+    # Advance the recovery checkpoint only when every Upwork search succeeded.
+    # If one or more searches failed, keeping the previous checkpoint allows
+    # the next run to recover jobs that may have been missed.
+    if not errors:
+        last_successful_check = now
+
+    save_state(seen, last_successful_check)
 
     print(f"Checked {len(jobs_by_id)} unique jobs.")
     print(f"New qualifying jobs: {len(new_matches)}")
+    print(f"Search errors: {len(errors)}")
+    if last_successful_check:
+        print(f"Last successful check: {last_successful_check.isoformat()}")
 
 
 if __name__ == "__main__":

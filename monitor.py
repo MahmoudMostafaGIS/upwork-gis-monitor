@@ -2,6 +2,7 @@ import os
 import json
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+import re
 
 import requests
 
@@ -406,6 +407,22 @@ def job_url(job):
     return "https://www.upwork.com/"
 
 
+def is_relevant_job(text):
+    """Return True only when a complete GIS-related term appears.
+
+    Word boundaries are important here. A simple substring check for "gis"
+    would incorrectly match unrelated words such as "logistics".
+    """
+    normalized = text.lower()
+
+    for term in RELEVANCE_TERMS:
+        pattern = rf"(?<![a-z0-9]){re.escape(term.lower())}(?![a-z0-9])"
+        if re.search(pattern, normalized):
+            return True
+
+    return False
+
+
 def format_budget(job):
     return "Budget not available from public search"
 
@@ -505,7 +522,7 @@ def main():
             )
         ).lower()
 
-        if not any(term in relevance_text for term in RELEVANCE_TERMS):
+        if not is_relevant_job(relevance_text):
             continue
 
         new_matches.append(

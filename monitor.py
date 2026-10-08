@@ -6,8 +6,14 @@ import re
 
 import requests
 
+
 GRAPHQL_URL = "https://api.upwork.com/graphql"
 TOKEN_URL = "https://www.upwork.com/api/v3/oauth2/token"
+
+
+# ============================================================
+# UPWORK SEARCH TERMS
+# ============================================================
 
 SEARCH_TERMS = [
     # Core GIS
@@ -52,22 +58,47 @@ SEARCH_TERMS = [
     "Shapefile",
 ]
 
-# Normal polling window. GitHub Actions runs every 10 minutes, so a small
-# overlap helps protect against scheduling/API delays.
+
+# ============================================================
+# MONITOR SETTINGS
+# ============================================================
+
+# Search jobs posted within the last 20 minutes.
+#
+# cron-job.org runs every 10 minutes, so this gives a 10-minute
+# overlap between consecutive runs.
 MAX_JOB_AGE_MINUTES = 20
 
-# Keep duplicate history long enough to cover delayed runs and recovery scans.
+
+# Keep duplicate IDs for 48 hours.
 SEEN_RETENTION_HOURS = 48
 
-# When a run is delayed or missed, search back from the previous successful
-# check (with a small overlap) instead of relying only on the normal 20-minute
-# window. The cap prevents an extremely old state from causing an unbounded
-# recovery window.
-RECOVERY_OVERLAP_MINUTES = 5
-MAX_RECOVERY_LOOKBACK_HOURS = 24
+
+# Completely reset the seen-job history every 4 days.
+#
+# This prevents seen_jobs.json from growing indefinitely.
+SEEN_CLEAN_INTERVAL_HOURS = 96
+
 
 STATE_FILE = Path("seen_jobs.json")
 
+
+# ============================================================
+# LOCAL RELEVANCE TERMS
+# ============================================================
+#
+# These are intentionally broader than SEARCH_TERMS.
+#
+# SEARCH_TERMS control how many Upwork API searches we make.
+#
+# RELEVANCE_TERMS perform the final local check on:
+#   - title
+#   - description
+#   - skills
+#
+# A job is accepted if at least one complete relevance term
+# appears in the job text.
+# ============================================================
 
 RELEVANCE_TERMS = [
     # Core GIS
@@ -129,6 +160,8 @@ RELEVANCE_TERMS = [
     "cartographic visualization",
     "topographic mapping",
     "gis mapping",
+
+    # Digitizing / GIS data production
     "map digitization",
     "map digitizing",
     "digitizing",
@@ -180,6 +213,11 @@ RELEVANCE_TERMS = [
     "geocoding",
 ]
 
+
+# ============================================================
+# GRAPHQL QUERY
+# ============================================================
+
 QUERY = """
 query PublicSearch($filter: PublicMarketplaceJobPostingsSearchFilter!) {
   publicMarketplaceJobPostingsSearch(
@@ -204,6 +242,10 @@ query PublicSearch($filter: PublicMarketplaceJobPostingsSearchFilter!) {
 """
 
 
+# ============================================================
+# TIME HELPERS
+# ============================================================
+
 def utcnow():
     return datetime.now(timezone.utc)
 
@@ -216,74 +258,109 @@ def parse_dt(value):
 
     try:
         dt = datetime.fromisoformat(value)
+
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
+
         return dt.astimezone(timezone.utc)
+
     except ValueError:
         return None
 
 
-def load_state():
-    """Load duplicate state and the timestamp of the last successful run.
+# ============================================================
+# STATE MANAGEMENT
+# ============================================================
 
-    Supports the old flat ``{job_id: timestamp}`` format so upgrading the
-    monitor does not discard existing duplicate history.
+def load_state():
     """
+    Load duplicate-job state.
+
+    The state file contains:
+        {
+            "last_cleanup": "...",
+            "jobs": {
+                "job_id": "timestamp"
+            }
+        }
+
+    Old state files containing last_successful_check are also handled
+    safely because only the "jobs" section is required.
+    """
+
     if not STATE_FILE.exists():
         return {}, None
 
     try:
-        data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        data = json.loads(
+            STATE_FILE.read_text(encoding="utf-8")
+        )
 
-        # New state format.
-        if isinstance(data, dict) and "jobs" in data:
-            raw_jobs = data.get("jobs", {})
-            last_successful_check = data.get("last_successful_check")
-        # Backward compatibility with the previous flat state format.
-        elif isinstance(data, dict):
-            raw_jobs = data
-            last_successful_check = None
-        else:
+        if not isinstance(data, dict):
             return {}, None
+
+        raw_jobs = data.get("jobs", {})
+        last_cleanup = parse_dt(
+            data.get("last_cleanup")
+        )
 
         if not isinstance(raw_jobs, dict):
             raw_jobs = {}
 
-        cutoff = utcnow() - timedelta(hours=SEEN_RETENTION_HOURS)
+        # Keep only jobs seen within the retention period.
+        cutoff = utcnow() - timedelta(
+            hours=SEEN_RETENTION_HOURS
+        )
+
         cleaned = {}
 
         for job_id, timestamp in raw_jobs.items():
+
             dt = parse_dt(timestamp)
 
             if dt and dt >= cutoff:
                 cleaned[str(job_id)] = timestamp
 
-        last_check = parse_dt(last_successful_check)
-
-        return cleaned, last_check
+        return cleaned, last_cleanup
 
     except Exception as exc:
-        print(f"Could not read state file; starting safely: {exc}")
+
+        print(
+            f"Could not read state file; "
+            f"starting safely: {exc}"
+        )
+
         return {}, None
 
 
-def save_state(seen, last_successful_check=None):
+def save_state(seen, last_cleanup=None):
+
     payload = {
-        "last_successful_check": (
-            last_successful_check.isoformat()
-            if isinstance(last_successful_check, datetime)
-            else last_successful_check
+        "last_cleanup": (
+            last_cleanup.isoformat()
+            if isinstance(last_cleanup, datetime)
+            else last_cleanup
         ),
         "jobs": seen,
     }
 
     STATE_FILE.write_text(
-        json.dumps(payload, indent=2, sort_keys=True),
+        json.dumps(
+            payload,
+            indent=2,
+            sort_keys=True
+        ),
         encoding="utf-8",
     )
 
 
+# ============================================================
+# UPWORK AUTHENTICATION
+# ============================================================
+
 def get_access_token():
+
+    # Optional direct access token.
     token = os.getenv("UPWORK_ACCESS_TOKEN")
 
     if token:
@@ -293,10 +370,17 @@ def get_access_token():
     client_secret = os.getenv("UPWORK_CLIENT_SECRET")
     refresh_token = os.getenv("UPWORK_REFRESH_TOKEN")
 
-    if not all([client_id, client_secret, refresh_token]):
+    if not all([
+        client_id,
+        client_secret,
+        refresh_token
+    ]):
+
         raise RuntimeError(
-            "Missing Upwork credentials. Set "
-            "UPWORK_CLIENT_ID + UPWORK_CLIENT_SECRET + UPWORK_REFRESH_TOKEN."
+            "Missing Upwork credentials. "
+            "Set UPWORK_CLIENT_ID + "
+            "UPWORK_CLIENT_SECRET + "
+            "UPWORK_REFRESH_TOKEN."
         )
 
     response = requests.post(
@@ -313,15 +397,24 @@ def get_access_token():
     response.raise_for_status()
 
     payload = response.json()
+
     token = payload.get("access_token")
 
     if not token:
-        raise RuntimeError(f"Upwork token refresh failed: {payload}")
+
+        raise RuntimeError(
+            f"Upwork token refresh failed: {payload}"
+        )
 
     return token
 
 
+# ============================================================
+# UPWORK SEARCH
+# ============================================================
+
 def search_upwork(token, term):
+
     variables = {
         "filter": {
             "searchExpression_eq": term,
@@ -350,65 +443,127 @@ def search_upwork(token, term):
     payload = response.json()
 
     if payload.get("errors"):
-        raise RuntimeError(json.dumps(payload["errors"], indent=2))
+
+        raise RuntimeError(
+            json.dumps(
+                payload["errors"],
+                indent=2
+            )
+        )
 
     return (
-        payload.get("data", {})
-        .get("publicMarketplaceJobPostingsSearch", {})
+        payload
+        .get("data", {})
+        .get(
+            "publicMarketplaceJobPostingsSearch",
+            {}
+        )
         .get("jobs", [])
     )
 
 
+# ============================================================
+# JOB URL
+# ============================================================
+
 def job_url(job):
-    ciphertext = str(job.get("ciphertext") or "").strip()
+
+    ciphertext = str(
+        job.get("ciphertext") or ""
+    ).strip()
 
     if ciphertext:
-        # Upwork's public API may return ciphertext with a leading "~".
-        # The job URL itself must contain exactly one "~".
+
+        # Upwork can return ciphertext with "~".
+        # The final URL must contain exactly one "~".
         ciphertext = ciphertext.lstrip("~")
-        return f"https://www.upwork.com/jobs/~{ciphertext}"
+
+        return (
+            f"https://www.upwork.com/jobs/~"
+            f"{ciphertext}"
+        )
 
     return "https://www.upwork.com/"
 
 
-def is_relevant_job(text):
-    """Return True only when a complete GIS-related term appears.
+# ============================================================
+# RELEVANCE FILTER
+# ============================================================
 
-    Word boundaries are important here. A simple substring check for "gis"
-    would incorrectly match unrelated words such as "logistics".
+def is_relevant_job(text):
+
     """
+    Return True when a complete GIS-related term
+    appears in the supplied text.
+
+    Word-boundary protection prevents:
+        GIS
+    from incorrectly matching:
+        logistics
+    """
+
     normalized = text.lower()
 
     for term in RELEVANCE_TERMS:
-        pattern = rf"(?<![a-z0-9]){re.escape(term.lower())}(?![a-z0-9])"
+
+        pattern = (
+            rf"(?<![a-z0-9])"
+            rf"{re.escape(term.lower())}"
+            rf"(?![a-z0-9])"
+        )
+
         if re.search(pattern, normalized):
             return True
 
     return False
 
 
+# ============================================================
+# FORMATTING
+# ============================================================
+
 def format_budget(job):
+
+    # Public marketplace search currently does not provide
+    # reliable budget fields for this monitor.
+
     return "Budget not available from public search"
 
 
 def format_age(minutes):
+
     if minutes < 1:
         return "less than 1 minute ago"
 
     return f"{int(minutes)} minutes ago"
 
 
-def send_telegram(message):
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+# ============================================================
+# TELEGRAM
+# ============================================================
 
-    if not bot_token or not chat_id:
-        raise RuntimeError(
-        "Telegram secrets are not configured. "
-        "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID."
+def send_telegram(message):
+
+    bot_token = os.getenv(
+        "TELEGRAM_BOT_TOKEN"
     )
 
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    chat_id = os.getenv(
+        "TELEGRAM_CHAT_ID"
+    )
+
+    if not bot_token or not chat_id:
+
+        raise RuntimeError(
+            "Telegram secrets are not configured. "
+            "Set TELEGRAM_BOT_TOKEN and "
+            "TELEGRAM_CHAT_ID."
+        )
+
+    url = (
+        f"https://api.telegram.org/"
+        f"bot{bot_token}/sendMessage"
+    )
 
     response = requests.post(
         url,
@@ -423,40 +578,80 @@ def send_telegram(message):
     response.raise_for_status()
 
 
+# ============================================================
+# MAIN
+# ============================================================
+
 def main():
+
     token = get_access_token()
-    seen, last_successful_check = load_state()
+
+    seen, last_cleanup = load_state()
 
     now = utcnow()
 
-    # Normal window: 20 minutes.
-    cutoff = now - timedelta(minutes=MAX_JOB_AGE_MINUTES)
+    # --------------------------------------------------------
+    # Normal polling window
+    # --------------------------------------------------------
+    #
+    # cron-job.org runs every 10 minutes.
+    #
+    # 20 minutes gives us a full overlap between runs.
+    #
+    cutoff = (
+        now
+        - timedelta(
+            minutes=MAX_JOB_AGE_MINUTES
+        )
+    )
 
-    # Automatic missed-job recovery: if the previous successful run was
-    # farther back than the normal window, include jobs from shortly before
-    # that run as well. This catches jobs missed because GitHub Actions ran
-    # late, was temporarily unavailable, or an API call was delayed.
-    recovery_floor = now - timedelta(hours=MAX_RECOVERY_LOOKBACK_HOURS)
+    # --------------------------------------------------------
+    # Four-day cleanup
+    # --------------------------------------------------------
+    #
+    # Every 96 hours the duplicate history is completely reset.
+    #
+    # This is safe because we only search the last 20 minutes.
+    #
+    cleanup_due = (
+        last_cleanup is None
+        or
+        now - last_cleanup
+        >= timedelta(
+            hours=SEEN_CLEAN_INTERVAL_HOURS
+        )
+    )
 
-    if last_successful_check:
-        recovery_cutoff = max(
-            recovery_floor,
-            last_successful_check - timedelta(minutes=RECOVERY_OVERLAP_MINUTES),
+    if cleanup_due:
+
+        print(
+            "Four-day seen-job cleanup is due; "
+            "resetting duplicate history."
         )
 
-        if recovery_cutoff < cutoff:
-            cutoff = recovery_cutoff
-            print(
-                "Recovery mode: searching back to "
-                f"{cutoff.isoformat()} based on the previous successful run."
-            )
+        seen = {}
+
+        last_cleanup = now
+
+    # --------------------------------------------------------
+    # Search Upwork
+    # --------------------------------------------------------
 
     jobs_by_id = {}
+
     errors = []
 
     for term in SEARCH_TERMS:
+
         try:
-            for job in search_upwork(token, term):
+
+            jobs = search_upwork(
+                token,
+                term
+            )
+
+            for job in jobs:
+
                 job_id = str(
                     job.get("ciphertext")
                     or job.get("recno")
@@ -464,51 +659,96 @@ def main():
                 )
 
                 if job_id:
+
                     jobs_by_id[job_id] = job
 
         except Exception as exc:
-            errors.append(f"{term}: {exc}")
+
+            errors.append(
+                f"{term}: {exc}"
+            )
+
+    # --------------------------------------------------------
+    # Search errors
+    # --------------------------------------------------------
 
     if errors:
-        print("Some searches failed:")
+
+        print(
+            "Some searches failed:"
+        )
 
         for error in errors:
+
             print(error)
+
+    # --------------------------------------------------------
+    # Filter new jobs
+    # --------------------------------------------------------
 
     new_matches = []
 
     for job_id, job in jobs_by_id.items():
+
+        # Already notified.
         if job_id in seen:
             continue
 
-        published = parse_dt(job.get("createdDateTime"))
+        published = parse_dt(
+            job.get("createdDateTime")
+        )
 
         if not published:
             continue
 
-        if published > now + timedelta(minutes=2):
+        # Ignore future timestamps caused by API clock differences.
+        if published > (
+            now + timedelta(minutes=2)
+        ):
             continue
 
+        # Ignore jobs outside our polling window.
         if published < cutoff:
             continue
 
         age_minutes = max(
             0,
-            (now - published).total_seconds() / 60,
+            (
+                now - published
+            ).total_seconds()
+            / 60,
         )
 
-        # Upwork's public search can return broad/irrelevant results.
-        # Verify the actual title, description, and skills before notifying.
+        # ----------------------------------------------------
+        # Build relevance text
+        # ----------------------------------------------------
+
         relevance_text = (
             f"{job.get('title', '')} "
             f"{job.get('description', '')} "
             + " ".join(
-                (s.get("name", "") + " " + s.get("prettyName", ""))
-                for s in (job.get("skills") or [])
+                (
+                    s.get("name", "")
+                    + " "
+                    + s.get(
+                        "prettyName",
+                        ""
+                    )
+                )
+                for s in (
+                    job.get("skills")
+                    or []
+                )
             )
-        ).lower()
+        )
 
-        if not is_relevant_job(relevance_text):
+        # ----------------------------------------------------
+        # Final GIS relevance check
+        # ----------------------------------------------------
+
+        if not is_relevant_job(
+            relevance_text
+        ):
             continue
 
         new_matches.append(
@@ -520,7 +760,15 @@ def main():
             )
         )
 
-    new_matches.sort(key=lambda x: x[0], reverse=True)
+    # Newest jobs first.
+    new_matches.sort(
+        key=lambda x: x[0],
+        reverse=True
+    )
+
+    # ========================================================
+    # BUILD TELEGRAM MESSAGE
+    # ========================================================
 
     messages = []
 
@@ -529,68 +777,177 @@ def main():
         age_minutes,
         job_id,
         job,
-    ) in enumerate(new_matches, start=1):
+    ) in enumerate(
+        new_matches,
+        start=1
+    ):
 
-        title = job.get("title", "Untitled GIS job")
+        title = job.get(
+            "title",
+            "Untitled GIS job"
+        )
 
-        description = (job.get("description") or "").strip()
-        description = " ".join(description.split())
+        # ----------------------------------------------------
+        # Description
+        # ----------------------------------------------------
 
+        description = (
+            job.get("description")
+            or ""
+        ).strip()
+
+        description = " ".join(
+            description.split()
+        )
+
+        # Keep Telegram messages manageable.
         if len(description) > 500:
-            description = description[:497] + "..."
 
-        skills = job.get("skills") or []
+            description = (
+                description[:497]
+                + "..."
+            )
+
+        # ----------------------------------------------------
+        # Skills
+        # ----------------------------------------------------
+
+        skills = (
+            job.get("skills")
+            or []
+        )
 
         skill_names = [
-            s.get("prettyName") or s.get("name")
+
+            s.get("prettyName")
+            or s.get("name")
+
             for s in skills
-            if s.get("prettyName") or s.get("name")
+
+            if (
+                s.get("prettyName")
+                or s.get("name")
+            )
         ]
 
+        # ----------------------------------------------------
+        # Job message
+        # ----------------------------------------------------
+
         job_message = (
+
             f"{index}. {title}\n\n"
-            f"Budget/Rate: {format_budget(job)}\n"
-            f"Posted: {format_age(age_minutes)}\n"
+
+            f"Budget/Rate: "
+            f"{format_budget(job)}\n"
+
+            f"Posted: "
+            f"{format_age(age_minutes)}\n"
         )
 
         if skill_names:
-            job_message += f"Skills: {', '.join(skill_names[:12])}\n"
+
+            job_message += (
+                "Skills: "
+                + ", ".join(
+                    skill_names[:12]
+                )
+                + "\n"
+            )
 
         job_message += (
+
             f"\n{description}\n\n"
-            f"Upwork: {job_url(job)}"
+
+            f"Upwork: "
+            f"{job_url(job)}"
         )
 
-        messages.append(job_message)
+        messages.append(
+            job_message
+        )
+
+    # ========================================================
+    # SEND TELEGRAM
+    # ========================================================
 
     if messages:
-        # One Telegram notification per monitor run, with a double-line
-        # separator only between jobs (not before the first or after the last).
-        message = "NEW GIS JOBS — " + str(len(messages)) + "\n\n"
-        message += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n".join(messages)
 
-        # IMPORTANT: only mark jobs as seen after Telegram accepts the
-        # notification. If Telegram fails, the jobs remain unseen and will be
-        # retried on the next run instead of being permanently lost.
+        message = (
+            "NEW GIS JOBS — "
+            + str(len(messages))
+            + "\n\n"
+        )
+
+        message += (
+            "\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        ).join(messages)
+
+        # ----------------------------------------------------
+        # IMPORTANT
+        # ----------------------------------------------------
+        #
+        # Jobs are marked as seen ONLY after Telegram
+        # successfully accepts the message.
+        #
+        # If Telegram fails, this raises an exception and
+        # the jobs remain unseen for the next run.
+        #
         send_telegram(message)
 
-        for _, _, job_id, _ in new_matches:
-            seen[job_id] = now.isoformat()
+        for (
+            _,
+            _,
+            job_id,
+            _
+        ) in new_matches:
 
-    # Advance the recovery checkpoint only when every Upwork search succeeded.
-    # If one or more searches failed, keeping the previous checkpoint allows
-    # the next run to recover jobs that may have been missed.
-    if not errors:
-        last_successful_check = now
+            seen[job_id] = (
+                now.isoformat()
+            )
 
-    save_state(seen, last_successful_check)
+    # ========================================================
+    # SAVE STATE
+    # ========================================================
 
-    print(f"Checked {len(jobs_by_id)} unique jobs.")
-    print(f"New qualifying jobs: {len(new_matches)}")
-    print(f"Search errors: {len(errors)}")
-    if last_successful_check:
-        print(f"Last successful check: {last_successful_check.isoformat()}")
+    save_state(
+        seen,
+        last_cleanup
+    )
 
+    # ========================================================
+    # LOGGING
+    # ========================================================
+
+    print(
+        f"Checked "
+        f"{len(jobs_by_id)} "
+        f"unique jobs."
+    )
+
+    print(
+        f"New qualifying jobs: "
+        f"{len(new_matches)}"
+    )
+
+    print(
+        f"Search errors: "
+        f"{len(errors)}"
+    )
+
+    if cleanup_due:
+
+        print(
+            "Seen-job history reset at: "
+            f"{last_cleanup.isoformat()}"
+        )
+
+
+# ============================================================
+# ENTRY POINT
+# ============================================================
 
 if __name__ == "__main__":
     main()

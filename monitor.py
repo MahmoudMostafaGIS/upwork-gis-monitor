@@ -124,115 +124,10 @@ SEARCH_TERMS = [
     "Shapefile",
 ]
 
-MAX_JOB_AGE_MINUTES = 30
+MAX_JOB_AGE_MINUTES = 45
 SEEN_RETENTION_HOURS = 24
 STATE_FILE = Path("seen_jobs.json")
 
-SCORED_KEYWORDS = {
-    "gis": 10,
-    "gis analyst": 10,
-    "geographic information system": 10,
-    "arcgis": 10,
-    "arcgis pro": 10,
-    "qgis": 10,
-    "geospatial": 9,
-    "geospatial data": 8,
-    "geospatial analysis": 10,
-    "spatial analysis": 10,
-
-    "gis web development": 10,
-    "gis web": 10,
-    "web gis": 10,
-    "web mapping": 9,
-    "web map": 7,
-    "interactive map": 10,
-    "interactive mapping": 10,
-    "interactive gis": 10,
-    "gis web application": 10,
-    "web map application": 10,
-    "mapbox": 10,
-    "mapbox gl js": 10,
-    "leaflet": 9,
-    "d3.js": 8,
-    "arcgis javascript api": 10,
-    "arcgis online": 8,
-
-    "python gis": 10,
-    "arcpy": 10,
-    "geopandas": 8,
-    "gdal": 8,
-    "postgis": 8,
-    "openstreetmap": 8,
-    "osm": 7,
-    "gis automation": 9,
-    "spatial database": 8,
-    "gis data processing": 8,
-    "cad to gis": 10,
-
-    "digitizing": 8,
-    "gis digitizing": 10,
-    "gis digitization": 10,
-    "map digitization": 10,
-    "map digitizing": 9,
-    "building digitization": 9,
-    "building footprints": 8,
-    "road digitization": 9,
-    "parcel digitization": 9,
-    "land use digitization": 9,
-    "utility digitization": 9,
-    "vectorization": 9,
-    "raster to vector": 9,
-    "feature digitization": 9,
-    "georeferencing": 9,
-    "georeference": 8,
-
-    "cartography": 7,
-    "gis cartography": 9,
-    "cartographic design": 9,
-    "map design": 8,
-    "thematic mapping": 8,
-    "map production": 8,
-    "cartographic visualization": 8,
-    "topographic mapping": 8,
-    "gis mapping": 8,
-
-    "geoai": 10,
-    "geospatial ai": 10,
-    "ai gis": 10,
-    "gis ai": 10,
-    "ai geospatial": 10,
-    "machine learning gis": 10,
-    "machine learning geospatial": 10,
-    "deep learning gis": 10,
-    "deep learning geospatial": 10,
-    "geospatial machine learning": 10,
-    "computer vision gis": 10,
-    "geospatial computer vision": 10,
-    "geospatial data science": 9,
-    "arcgis deep learning": 10,
-    "arcgis pro deep learning": 10,
-    "object detection gis": 10,
-    "image segmentation gis": 10,
-    "semantic segmentation gis": 10,
-    "instance segmentation gis": 10,
-    "ocr gis": 9,
-    "geospatial ocr": 10,
-
-    "remote sensing": 8,
-    "remote sensing ai": 10,
-    "remote sensing machine learning": 10,
-    "remote sensing deep learning": 10,
-    "satellite image analysis": 9,
-    "satellite imagery ai": 10,
-    "image classification gis": 9,
-    "object detection geospatial": 10,
-
-    "geocoding": 7,
-    "google earth": 6,
-    "geojson": 6,
-    "kml": 6,
-    "shapefile": 6,
-}
 
 QUERY = """
 query PublicSearch($filter: PublicMarketplaceJobPostingsSearchFilter!) {
@@ -385,27 +280,6 @@ def search_upwork(token, term):
     )
 
 
-def score_job(job):
-    text = (
-        f"{job.get('title', '')} "
-        f"{job.get('description', '')} "
-        + " ".join(
-            (s.get("name", "") + " " + s.get("prettyName", ""))
-            for s in (job.get("skills") or [])
-        )
-    ).lower()
-
-    score = 0
-    matched = []
-
-    for keyword, points in SCORED_KEYWORDS.items():
-        if keyword in text:
-            score += points
-            matched.append(keyword)
-
-    return score, matched
-
-
 def job_url(job):
     ciphertext = job.get("ciphertext")
 
@@ -503,17 +377,10 @@ def main():
             (now - published).total_seconds() / 60,
         )
 
-        score, matched = score_job(job)
-
-        if score < 15:
-            continue
-
         new_matches.append(
             (
                 published,
                 age_minutes,
-                score,
-                matched,
                 job_id,
                 job,
             )
@@ -521,7 +388,7 @@ def main():
 
     new_matches.sort(key=lambda x: x[0], reverse=True)
 
-    for _, _, _, _, job_id, _ in new_matches:
+    for _, _, job_id, _ in new_matches:
         seen[job_id] = now.isoformat()
 
     save_seen(seen)
@@ -529,8 +396,6 @@ def main():
     for (
         published,
         age_minutes,
-        score,
-        matched,
         job_id,
         job,
     ) in new_matches:
@@ -555,8 +420,6 @@ def main():
             f"NEW GIS JOB — {format_age(age_minutes)}\n\n"
             f"{title}\n\n"
             f"Budget/Rate: {format_budget(job)}\n"
-            f"Match score: {score}\n"
-            f"Matched: {', '.join(matched[:12])}\n"
         )
 
         if skill_names:

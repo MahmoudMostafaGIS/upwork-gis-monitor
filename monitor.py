@@ -56,6 +56,8 @@ SEARCH_TERMS = [
     # Other useful GIS tools / formats
     "Google Earth",
     "Shapefile",
+    "Geojson",
+    "Kml"
 ]
 
 
@@ -77,7 +79,7 @@ SEEN_RETENTION_HOURS = 48
 # Completely reset the seen-job history every 4 days.
 #
 # This prevents seen_jobs.json from growing indefinitely.
-SEEN_CLEAN_INTERVAL_HOURS = 96
+SEEN_CLEAN_INTERVAL_HOURS = 72
 
 
 STATE_FILE = Path("seen_jobs.json")

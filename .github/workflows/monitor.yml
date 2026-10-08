@@ -1,9 +1,6 @@
 name: Upwork GIS Monitor
 
 on:
-  schedule:
-    # Every 10 minutes.
-    - cron: "1-59/10 * * * *"
   workflow_dispatch:
 
 permissions:

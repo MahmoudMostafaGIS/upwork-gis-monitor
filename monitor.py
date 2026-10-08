@@ -12,116 +12,43 @@ TOKEN_URL = "https://www.upwork.com/api/v3/oauth2/token"
 SEARCH_TERMS = [
     # Core GIS
     "GIS",
-    "GIS Analyst",
-    "Geographic Information System (GIS)",
+    "Geospatial",
     "Geographic Information System",
+    "Spatial Analysis",
+
+    # Esri / desktop GIS
     "ArcGIS",
     "ArcGIS Pro",
     "QGIS",
-    "Geospatial",
-    "Geospatial Data",
-    "Geospatial Analysis",
-    "Spatial Analysis",
-
-    # GIS development / web mapping
-    "GIS Web Development",
-    "Web GIS",
-    "Web Mapping",
-    "Web Map",
-    "Interactive Map",
-    "Interactive Mapping",
-    "Interactive GIS",
-    "GIS Web Application",
-    "Web Map Application",
-    "Mapbox",
-    "Mapbox GL JS",
-    "Leaflet",
-    "LeafletJS",
-    "D3.js",
-    "ArcGIS JavaScript API",
-    "ArcGIS Online",
-
-    # GIS data / automation
-    "Python GIS",
     "ArcPy",
+
+    # Web mapping / visualization
+    "Web Mapping",
+    "Interactive Map",
+    "Mapbox",
+    "Leaflet",
+    "D3.js",
+
+    # Geospatial development / data
     "GeoPandas",
     "GDAL",
     "PostGIS",
     "OpenStreetMap",
-    "OSM",
-    "GIS Automation",
-    "Spatial Database",
-    "GIS Data Processing",
-    "CAD to GIS",
+    "Geoprocessing",
 
-    # Digitizing / vectorization
-    "Digitizing",
-    "GIS Digitizing",
-    "GIS Digitization",
-    "Map Digitization",
-    "Map Digitizing",
-    "Building Digitization",
-    "Building Footprints",
-    "Road Digitization",
-    "Parcel Digitization",
-    "Land Use Digitization",
-    "Utility Digitization",
-    "Vectorization",
-    "Raster to Vector",
-    "Feature Digitization",
-    "Georeferencing",
-    "Georeference",
-
-    # Cartography / mapping
+    # Cartography / data production
     "Cartography",
-    "GIS Cartography",
-    "Cartographic Design",
-    "Map Design",
-    "Thematic Mapping",
-    "Map Production",
-    "Cartographic Visualization",
-    "Topographic Mapping",
-    "GIS Mapping",
+    "Map Digitization",
+    "Georeferencing",
 
-    # GeoAI / AI / machine learning
+    # GeoAI / remote sensing
     "GeoAI",
     "Geospatial AI",
-    "AI GIS",
-    "GIS AI",
-    "AI Geospatial",
-    "Machine Learning GIS",
-    "Machine Learning Geospatial",
-    "Deep Learning GIS",
-    "Deep Learning Geospatial",
-    "Geospatial Machine Learning",
-    "Computer Vision GIS",
-    "Geospatial Computer Vision",
-    "Geospatial Data Science",
-    "ArcGIS Deep Learning",
-    "ArcGIS Pro Deep Learning",
-    "Object Detection GIS",
-    "Image Segmentation GIS",
-    "Semantic Segmentation GIS",
-    "Instance Segmentation GIS",
-    "OCR GIS",
-    "Geospatial OCR",
-
-    # Remote sensing / imagery
     "Remote Sensing",
-    "Remote Sensing AI",
-    "Remote Sensing Machine Learning",
-    "Remote Sensing Deep Learning",
-    "Satellite",
     "Satellite Image Analysis",
-    "Satellite Imagery AI",
-    "Image Classification GIS",
-    "Object Detection Geospatial",
 
-    # Other useful GIS data terms
-    "Geocoding",
+    # Other useful GIS tools / formats
     "Google Earth",
-    "GeoJSON",
-    "KML",
     "Shapefile",
 ]
 
@@ -145,19 +72,24 @@ STATE_FILE = Path("seen_jobs.json")
 RELEVANCE_TERMS = [
     # Core GIS
     "gis",
-    "gis analyst",
-    "geographic information system",
-    "arcgis",
-    "arcgis pro",
-    "qgis",
     "geospatial",
+    "geographic information system",
+    "spatial analysis",
+    "spatial data",
     "geospatial data",
     "geospatial analysis",
-    "spatial analysis",
 
-    # Web GIS / interactive mapping
-    "gis web development",
-    "web gis",
+    # Esri / desktop GIS
+    "arcgis",
+    "arcgis pro",
+    "arcgis online",
+    "arcgis server",
+    "arcgis portal",
+    "arcgis javascript api",
+    "arcpy",
+    "qgis",
+
+    # Web GIS / web mapping
     "web mapping",
     "web map",
     "interactive map",
@@ -170,41 +102,24 @@ RELEVANCE_TERMS = [
     "leaflet",
     "leafletjs",
     "d3.js",
-    "arcgis javascript api",
-    "arcgis online",
 
-    # GIS data / automation
+    # GIS programming / data processing
     "python gis",
-    "arcpy",
     "geopandas",
     "gdal",
     "postgis",
+    "geoprocessing",
+    "gis automation",
+    "gis data processing",
+    "spatial database",
+    "cad to gis",
+    "geojson",
+    "shapefile",
+    "kml",
     "openstreetmap",
     "osm",
-    "gis automation",
-    "spatial database",
-    "gis data processing",
-    "cad to gis",
 
-    # Digitizing / vectorization
-    "digitizing",
-    "gis digitizing",
-    "gis digitization",
-    "map digitization",
-    "map digitizing",
-    "building digitization",
-    "building footprints",
-    "road digitization",
-    "parcel digitization",
-    "land use digitization",
-    "utility digitization",
-    "vectorization",
-    "raster to vector",
-    "feature digitization",
-    "georeferencing",
-    "georeference",
-
-    # Cartography
+    # Cartography / mapping
     "cartography",
     "gis cartography",
     "cartographic design",
@@ -214,6 +129,17 @@ RELEVANCE_TERMS = [
     "cartographic visualization",
     "topographic mapping",
     "gis mapping",
+    "map digitization",
+    "map digitizing",
+    "digitizing",
+    "georeferencing",
+    "georeference",
+    "building footprints",
+    "building digitization",
+    "road digitization",
+    "parcel digitization",
+    "land use digitization",
+    "utility digitization",
 
     # GeoAI / AI / machine learning
     "geoai",
@@ -244,16 +170,14 @@ RELEVANCE_TERMS = [
     "remote sensing machine learning",
     "remote sensing deep learning",
     "satellite image analysis",
+    "satellite imagery",
     "satellite imagery ai",
     "image classification gis",
     "object detection geospatial",
 
-    # Other GIS data terms
-    "geocoding",
+    # Other GIS-related tools
     "google earth",
-    "geojson",
-    "kml",
-    "shapefile",
+    "geocoding",
 ]
 
 QUERY = """
@@ -479,9 +403,10 @@ def send_telegram(message):
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
     if not bot_token or not chat_id:
-        print("Telegram secrets are not configured; printing alert instead.")
-        print(message)
-        return
+        raise RuntimeError(
+        "Telegram secrets are not configured. "
+        "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID."
+    )
 
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
 

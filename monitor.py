@@ -124,10 +124,124 @@ SEARCH_TERMS = [
     "Shapefile",
 ]
 
-MAX_JOB_AGE_MINUTES = 45
+MAX_JOB_AGE_MINUTES = 15
 SEEN_RETENTION_HOURS = 24
 STATE_FILE = Path("seen_jobs.json")
 
+
+RELEVANCE_TERMS = [
+    # Core GIS
+    "gis",
+    "gis analyst",
+    "geographic information system",
+    "arcgis",
+    "arcgis pro",
+    "qgis",
+    "geospatial",
+    "geospatial data",
+    "geospatial analysis",
+    "spatial analysis",
+
+    # Web GIS / interactive mapping
+    "gis web development",
+    "web gis",
+    "web mapping",
+    "web map",
+    "interactive map",
+    "interactive mapping",
+    "interactive gis",
+    "gis web application",
+    "web map application",
+    "mapbox",
+    "mapbox gl js",
+    "leaflet",
+    "leafletjs",
+    "d3.js",
+    "arcgis javascript api",
+    "arcgis online",
+
+    # GIS data / automation
+    "python gis",
+    "arcpy",
+    "geopandas",
+    "gdal",
+    "postgis",
+    "openstreetmap",
+    "osm",
+    "gis automation",
+    "spatial database",
+    "gis data processing",
+    "cad to gis",
+
+    # Digitizing / vectorization
+    "digitizing",
+    "gis digitizing",
+    "gis digitization",
+    "map digitization",
+    "map digitizing",
+    "building digitization",
+    "building footprints",
+    "road digitization",
+    "parcel digitization",
+    "land use digitization",
+    "utility digitization",
+    "vectorization",
+    "raster to vector",
+    "feature digitization",
+    "georeferencing",
+    "georeference",
+
+    # Cartography
+    "cartography",
+    "gis cartography",
+    "cartographic design",
+    "map design",
+    "thematic mapping",
+    "map production",
+    "cartographic visualization",
+    "topographic mapping",
+    "gis mapping",
+
+    # GeoAI / AI / machine learning
+    "geoai",
+    "geospatial ai",
+    "ai gis",
+    "gis ai",
+    "ai geospatial",
+    "machine learning gis",
+    "machine learning geospatial",
+    "deep learning gis",
+    "deep learning geospatial",
+    "geospatial machine learning",
+    "computer vision gis",
+    "geospatial computer vision",
+    "geospatial data science",
+    "arcgis deep learning",
+    "arcgis pro deep learning",
+    "object detection gis",
+    "image segmentation gis",
+    "semantic segmentation gis",
+    "instance segmentation gis",
+    "ocr gis",
+    "geospatial ocr",
+
+    # Remote sensing / imagery
+    "remote sensing",
+    "remote sensing ai",
+    "remote sensing machine learning",
+    "remote sensing deep learning",
+    "satellite image analysis",
+    "satellite imagery ai",
+    "image classification gis",
+    "object detection geospatial",
+
+    # Other GIS data terms
+    "geocoding",
+    "google earth",
+    "geojson",
+    "kml",
+    "shapefile",
+]
 
 QUERY = """
 query PublicSearch($filter: PublicMarketplaceJobPostingsSearchFilter!) {
@@ -376,6 +490,20 @@ def main():
             0,
             (now - published).total_seconds() / 60,
         )
+
+        # Upwork's public search can return broad/irrelevant results.
+        # Verify the actual title, description, and skills before notifying.
+        relevance_text = (
+            f"{job.get('title', '')} "
+            f"{job.get('description', '')} "
+            + " ".join(
+                (s.get("name", "") + " " + s.get("prettyName", ""))
+                for s in (job.get("skills") or [])
+            )
+        ).lower()
+
+        if not any(term in relevance_text for term in RELEVANCE_TERMS):
+            continue
 
         new_matches.append(
             (

@@ -124,7 +124,7 @@ SEARCH_TERMS = [
     "Shapefile",
 ]
 
-MAX_JOB_AGE_MINUTES = 60
+MAX_JOB_AGE_MINUTES = 10
 SEEN_RETENTION_HOURS = 24
 STATE_FILE = Path("seen_jobs.json")
 
@@ -524,12 +524,14 @@ def main():
 
     save_seen(seen)
 
-    for (
+    messages = []
+
+    for index, (
         published,
         age_minutes,
         job_id,
         job,
-    ) in new_matches:
+    ) in enumerate(new_matches, start=1):
 
         title = job.get("title", "Untitled GIS job")
 
@@ -547,20 +549,27 @@ def main():
             if s.get("prettyName") or s.get("name")
         ]
 
-        message = (
-            f"NEW GIS JOB — {format_age(age_minutes)}\n\n"
-            f"{title}\n\n"
+        job_message = (
+            f"{index}. {title}\n\n"
             f"Budget/Rate: {format_budget(job)}\n"
+            f"Posted: {format_age(age_minutes)}\n"
         )
 
         if skill_names:
-            message += f"Skills: {', '.join(skill_names[:12])}\n"
+            job_message += f"Skills: {', '.join(skill_names[:12])}\n"
 
-        message += (
+        job_message += (
             f"\n{description}\n\n"
             f"Upwork: {job_url(job)}"
         )
 
+        messages.append(job_message)
+
+    if messages:
+        # One Telegram notification per monitor run, with a double-line
+        # separator only between jobs (not before the first or after the last).
+        message = "NEW GIS JOBS — " + str(len(messages)) + "\n\n"
+        message += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n".join(messages)
         send_telegram(message)
 
     print(f"Checked {len(jobs_by_id)} unique jobs.")

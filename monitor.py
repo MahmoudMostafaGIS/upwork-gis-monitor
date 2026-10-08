@@ -395,9 +395,12 @@ def search_upwork(token, term):
 
 
 def job_url(job):
-    ciphertext = job.get("ciphertext")
+    ciphertext = str(job.get("ciphertext") or "").strip()
 
     if ciphertext:
+        # Upwork's public API may return ciphertext with a leading "~".
+        # The job URL itself must contain exactly one "~".
+        ciphertext = ciphertext.lstrip("~")
         return f"https://www.upwork.com/jobs/~{ciphertext}"
 
     return "https://www.upwork.com/"

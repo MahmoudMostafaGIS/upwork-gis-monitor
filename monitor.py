@@ -396,19 +396,62 @@ def get_access_token():
         timeout=30,
     )
 
-    response.raise_for_status()
+   
+    try:
+        response = requests.post(
+            TOKEN_URL,
+            data={
+                "grant_type": "refresh_token",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+            },
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError(
+            f"Could not reach Upwork OAuth endpoint: "
+            f"{type(exc).__name__}"
+        ) from None
 
-    payload = response.json()
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+
+    if not response.ok:
+        error_code = payload.get("error")
+        error_description = payload.get("error_description")
+
+        details = []
+        if error_code:
+            details.append(f"error={error_code}")
+        if error_description:
+            details.append(
+                f"description={error_description}"
+            )
+
+        safe_details = (
+            "; ".join(details)
+            or "Upwork returned no readable OAuth error"
+        )
+
+        raise RuntimeError(
+            f"Upwork OAuth token refresh failed "
+            f"(HTTP {response.status_code}): {safe_details}. "
+            "Check UPWORK_CLIENT_ID, UPWORK_CLIENT_SECRET, "
+            "and UPWORK_REFRESH_TOKEN in GitHub Actions Secrets."
+        )
 
     token = payload.get("access_token")
 
     if not token:
-
         raise RuntimeError(
-            f"Upwork token refresh failed: {payload}"
+            "Upwork OAuth response did not contain an access_token."
         )
 
     return token
+
 
 
 # ============================================================

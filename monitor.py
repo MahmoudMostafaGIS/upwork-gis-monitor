@@ -191,6 +191,7 @@ def save_state(seen, last_cleanup=None):
 
 
 def update_github_refresh_secret(new_refresh_token):
+    # Persist a rotated Upwork refresh token to GitHub Actions secrets with retries.
     github_token = os.getenv("GH_SECRETS_TOKEN")
     repository = os.getenv("GITHUB_REPOSITORY")
     if not github_token or not repository:
@@ -204,39 +205,64 @@ def update_github_refresh_secret(new_refresh_token):
         "X-GitHub-Api-Version": "2022-11-28",
     }
     base_url = f"https://api.github.com/repos/{repository}/actions/secrets"
-    try:
-        key_response = requests.get(
-            f"{base_url}/public-key", headers=headers, timeout=20
-        )
-        key_response.raise_for_status()
-        key_data = key_response.json()
-        public_key = PublicKey(base64.b64decode(key_data["key"]))
-        encrypted = SealedBox(public_key).encrypt(new_refresh_token.encode("utf-8"))
-        response = requests.put(
-            f"{base_url}/UPWORK_REFRESH_TOKEN",
-            headers=headers,
-            json={
-                "encrypted_value": base64.b64encode(encrypted).decode("ascii"),
-                "key_id": key_data["key_id"],
-            },
-            timeout=20,
-        )
-        response.raise_for_status()
 
-    except requests.RequestException as exc:
-        status = getattr(exc.response, "status_code", None)
+    # Retry network errors, rate limits, and GitHub server errors.
+    for attempt in range(1, 4):
         try:
-            details = exc.response.json().get("message", "")
-        except (AttributeError, ValueError):
-            details = ""
+            key_response = requests.get(
+                f"{base_url}/public-key", headers=headers, timeout=20
+            )
+            key_response.raise_for_status()
+            key_data = key_response.json()
 
-        raise RuntimeError(
-            "Could not save rotated refresh token to GitHub. "
-            f"HTTP status: {status}; "
-            f"details: {details or type(exc).__name__}"
-        ) from None
+            public_key = PublicKey(base64.b64decode(key_data["key"], validate=True))
+            encrypted = SealedBox(public_key).encrypt(
+                new_refresh_token.encode("utf-8")
+            )
+            response = requests.put(
+                f"{base_url}/UPWORK_REFRESH_TOKEN",
+                headers=headers,
+                json={
+                    "encrypted_value": base64.b64encode(encrypted).decode("ascii"),
+                    "key_id": key_data["key_id"],
+                },
+                timeout=20,
+            )
+            response.raise_for_status()
+            print("Updated UPWORK_REFRESH_TOKEN in GitHub Actions secrets.")
+            return
 
-    print("Updated UPWORK_REFRESH_TOKEN in GitHub Actions secrets.")
+        except (requests.RequestException, KeyError, ValueError, TypeError) as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            retryable = status is None or status == 429 or status >= 500
+            if attempt < 3 and retryable:
+                import time
+                time.sleep(attempt * 2)
+                continue
+
+            if isinstance(exc, requests.RequestException):
+                try:
+                    details = exc.response.json().get("message", "")
+                except (AttributeError, ValueError):
+                    details = ""
+                raise RuntimeError(
+                    "Upwork returned a replacement refresh token, but GitHub "
+                    f"could not save it after {attempt} attempt(s). "
+                    f"HTTP status: {status}; details: {details or type(exc).__name__}. "
+                    "Fix the GitHub API error before running the monitor again."
+                ) from None
+
+            raise RuntimeError(
+                "Upwork returned a replacement refresh token, but GitHub's "
+                "secret response was invalid. Fix the GitHub API response before "
+                "running the monitor again. "
+                f"Error type: {type(exc).__name__}."
+            ) from None
+
+    raise RuntimeError(
+        "Could not save the rotated Upwork refresh token after three attempts."
+    )
+
 
 def get_access_token():
     """Return a configured access token or refresh it with OAuth credentials."""

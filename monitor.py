@@ -222,15 +222,21 @@ def update_github_refresh_secret(new_refresh_token):
             timeout=20,
         )
         response.raise_for_status()
-    except (requests.RequestException, KeyError, ValueError) as exc:
+
+    except requests.RequestException as exc:
+        status = getattr(exc.response, "status_code", None)
+        try:
+            details = exc.response.json().get("message", "")
+        except (AttributeError, ValueError):
+            details = ""
+
         raise RuntimeError(
-            "Upwork returned a replacement refresh token, but GitHub could not "
-            "save it. Check GH_SECRETS_TOKEN repository Actions-secrets write "
-            f"permission. Error type: {type(exc).__name__}."
+            "Could not save rotated refresh token to GitHub. "
+            f"HTTP status: {status}; "
+            f"details: {details or type(exc).__name__}"
         ) from None
 
     print("Updated UPWORK_REFRESH_TOKEN in GitHub Actions secrets.")
-
 
 def get_access_token():
     """Return a configured access token or refresh it with OAuth credentials."""

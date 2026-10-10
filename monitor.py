@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import re
@@ -5,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
+from nacl.public import PublicKey, SealedBox
 
 
 GRAPHQL_URL = "https://api.upwork.com/graphql"
@@ -188,6 +190,48 @@ def save_state(seen, last_cleanup=None):
     )
 
 
+def update_github_refresh_secret(new_refresh_token):
+    github_token = os.getenv("GH_SECRETS_TOKEN")
+    repository = os.getenv("GITHUB_REPOSITORY")
+    if not github_token or not repository:
+        raise RuntimeError(
+            "Missing GH_SECRETS_TOKEN or GITHUB_REPOSITORY; cannot save a rotated token."
+        )
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {github_token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    base_url = f"https://api.github.com/repos/{repository}/actions/secrets"
+    try:
+        key_response = requests.get(
+            f"{base_url}/public-key", headers=headers, timeout=20
+        )
+        key_response.raise_for_status()
+        key_data = key_response.json()
+        public_key = PublicKey(base64.b64decode(key_data["key"]))
+        encrypted = SealedBox(public_key).encrypt(new_refresh_token.encode("utf-8"))
+        response = requests.put(
+            f"{base_url}/UPWORK_REFRESH_TOKEN",
+            headers=headers,
+            json={
+                "encrypted_value": base64.b64encode(encrypted).decode("ascii"),
+                "key_id": key_data["key_id"],
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
+    except (requests.RequestException, KeyError, ValueError) as exc:
+        raise RuntimeError(
+            "Upwork returned a replacement refresh token, but GitHub could not "
+            "save it. Check GH_SECRETS_TOKEN repository Actions-secrets write "
+            f"permission. Error type: {type(exc).__name__}."
+        ) from None
+
+    print("Updated UPWORK_REFRESH_TOKEN in GitHub Actions secrets.")
+
+
 def get_access_token():
     """Return a configured access token or refresh it with OAuth credentials."""
     # Optional direct access token. If set, it takes precedence over refresh.
@@ -198,11 +242,18 @@ def get_access_token():
     client_id = os.getenv("UPWORK_CLIENT_ID")
     client_secret = os.getenv("UPWORK_CLIENT_SECRET")
     refresh_token = os.getenv("UPWORK_REFRESH_TOKEN")
+    github_token = os.getenv("GH_SECRETS_TOKEN")
 
     if not all([client_id, client_secret, refresh_token]):
         raise RuntimeError(
             "Missing Upwork credentials. Set UPWORK_CLIENT_ID, "
             "UPWORK_CLIENT_SECRET, and UPWORK_REFRESH_TOKEN."
+        )
+
+    if not github_token:
+        raise RuntimeError(
+            "Missing GH_SECRETS_TOKEN. Add a GitHub token with repository "
+            "Actions-secrets write permission as the GH_SECRETS_TOKEN secret."
         )
 
     # IMPORTANT: only one OAuth request is made. Do not log credential values
@@ -259,6 +310,10 @@ def get_access_token():
         raise RuntimeError(
             f"Upwork OAuth returned an unexpected response: {safe_details}"
         )
+
+    new_refresh_token = payload.get("refresh_token")
+    if new_refresh_token and new_refresh_token != refresh_token:
+        update_github_refresh_secret(new_refresh_token)
 
     return access_token
 
